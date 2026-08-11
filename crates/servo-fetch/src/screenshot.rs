@@ -155,15 +155,15 @@ fn device_rect(size: PhysicalSize<u32>) -> WebViewRect {
 /// or `None` if the measured content already fits inside the viewport.
 fn resolve_full_page_size(
     measured: PhysicalSize<u32>,
-    viewport: PhysicalSize<u32>,
+    _viewport: PhysicalSize<u32>,
     max_pixels: u32,
 ) -> Option<PhysicalSize<u32>> {
-    if measured.width <= viewport.width && measured.height <= viewport.height {
+    if measured.width == 0 || measured.height == 0 {
         return None;
     }
     Some(PhysicalSize::new(
-        measured.width.clamp(viewport.width, max_pixels),
-        measured.height.clamp(viewport.height, max_pixels),
+        measured.width.min(max_pixels),
+        measured.height.min(max_pixels),
     ))
 }
 
@@ -171,15 +171,8 @@ fn resolve_full_page_size(
 fn measure_full_page(servo: &servo::Servo, webview: &WebView, deadline: Instant) -> Option<PhysicalSize<u32>> {
     const SIZE_JS: &str = r"
         (() => {
-            const root = document.documentElement;
-            const body = document.body;
-            const widths = [root.scrollWidth, root.offsetWidth, root.clientWidth];
-            const heights = [root.scrollHeight, root.offsetHeight, root.clientHeight];
-            if (body) {
-                widths.push(body.scrollWidth, body.offsetWidth, body.clientWidth);
-                heights.push(body.scrollHeight, body.offsetHeight, body.clientHeight);
-            }
-            return JSON.stringify({ w: Math.max(...widths), h: Math.max(...heights) });
+            const el = document.body ?? document.documentElement;
+            return JSON.stringify(el ? { w: el.scrollWidth, h: el.scrollHeight } : { w: 0, h: 0 });
         })()
     ";
     #[derive(serde::Deserialize)]
@@ -189,10 +182,12 @@ fn measure_full_page(servo: &servo::Servo, webview: &WebView, deadline: Instant)
     }
     let raw = eval_js(servo, webview, SIZE_JS, deadline).ok()?;
     let size: Size = serde_json::from_str(&raw).ok()?;
-    Some(PhysicalSize::new(
-        normalize_dimension(size.w),
-        normalize_dimension(size.h),
-    ))
+    let w = normalize_dimension(size.w);
+    let h = normalize_dimension(size.h);
+    if w == 0 && h == 0 {
+        return Some(PhysicalSize::new(layout::VIEWPORT_WIDTH, layout::VIEWPORT_HEIGHT));
+    }
+    Some(PhysicalSize::new(w, h))
 }
 
 #[expect(

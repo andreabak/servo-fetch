@@ -14,6 +14,7 @@ pub(crate) struct BuildOpts<'py> {
     pub settle: Option<f64>,
     pub user_agent: Option<String>,
     pub screenshot: bool,
+    pub full_page: bool,
     pub javascript: Option<String>,
     pub schema: Option<Bound<'py, Schema>>,
     pub cookies_file: Option<PathBuf>,
@@ -42,7 +43,7 @@ pub(crate) fn prepare(args: BuildOpts<'_>) -> PyResult<Prepared> {
     let js_requested = args.javascript.is_some();
 
     let mut opts = match (args.screenshot, args.javascript.as_deref()) {
-        (true, _) => servo_fetch::FetchOptions::screenshot(&args.url, true),
+        (true, _) => servo_fetch::FetchOptions::screenshot(&args.url, args.full_page),
         (false, Some(expr)) => servo_fetch::FetchOptions::javascript(&args.url, expr.to_string()),
         (false, None) => servo_fetch::FetchOptions::new(&args.url),
     };

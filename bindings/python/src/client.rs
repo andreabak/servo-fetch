@@ -36,7 +36,7 @@ impl Client {
     }
 
     /// Fetch a single URL, merging client defaults with per-call overrides.
-    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
+    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, full_page=true, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
     #[allow(clippy::too_many_arguments)]
     fn fetch(
         &self,
@@ -45,6 +45,7 @@ impl Client {
         timeout: Option<f64>,
         settle: Option<f64>,
         screenshot: bool,
+        full_page: bool,
         javascript: Option<String>,
         schema: Option<Bound<'_, Schema>>,
         cookies_file: Option<PathBuf>,
@@ -70,6 +71,7 @@ impl Client {
             settle,
             user_agent: self.user_agent.clone(),
             screenshot,
+            full_page,
             javascript,
             schema,
             cookies_file,

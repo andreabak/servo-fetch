@@ -20,7 +20,7 @@ use crate::opts::{BuildOpts, prepare};
 
 /// Fetch, render, and extract a single URL.
 #[pyfunction]
-#[pyo3(signature = (url, *, timeout=None, settle=None, user_agent=None, screenshot=false, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
+#[pyo3(signature = (url, *, timeout=None, settle=None, user_agent=None, screenshot=false, full_page=true, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
 #[allow(clippy::too_many_arguments)]
 fn fetch(
     py: Python<'_>,
@@ -29,6 +29,7 @@ fn fetch(
     settle: Option<f64>,
     user_agent: Option<String>,
     screenshot: bool,
+    full_page: bool,
     javascript: Option<String>,
     schema: Option<Bound<'_, schema::Schema>>,
     cookies_file: Option<PathBuf>,
@@ -52,6 +53,7 @@ fn fetch(
         settle,
         user_agent,
         screenshot,
+        full_page,
         javascript,
         schema,
         cookies_file,

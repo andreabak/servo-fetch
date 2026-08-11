@@ -76,7 +76,7 @@ impl Session {
     }
 
     /// Fetch a URL inside this session, preserving cookies and storage across calls.
-    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, javascript=None, headers=None))]
+    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, full_page=true, javascript=None, headers=None))]
     #[allow(clippy::too_many_arguments)]
     fn fetch(
         &self,
@@ -85,6 +85,7 @@ impl Session {
         timeout: Option<f64>,
         settle: Option<f64>,
         screenshot: bool,
+        full_page: bool,
         javascript: Option<String>,
         headers: Option<HashMap<String, String>>,
     ) -> PyResult<Page> {
@@ -94,6 +95,7 @@ impl Session {
             settle,
             user_agent: None,
             screenshot,
+            full_page,
             javascript,
             schema: None,
             cookies_file: None,
