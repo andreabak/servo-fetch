@@ -196,7 +196,8 @@ fn build_fetch_options(args: &FetchArgs, url: &str) -> Result<FetchOptions> {
         .network_policy(servo_fetch::engine_policy())
         .timeout(Duration::from_secs(args.timeout))
         .settle(Duration::from_millis(args.settle))
-        .visibility(args.visibility.to_policy());
+        .visibility(args.visibility.to_policy())
+        .zoom(args.zoom);
     let opts = match args.user_agent {
         Some(ref ua) => opts.user_agent(ua),
         None => opts,

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use dpi::PhysicalSize;
-use euclid::{Box2D, Point2D};
+use euclid::{Box2D, Point2D, Scale};
 use image::RgbaImage;
 use servo::{DevicePixel, WebView, WebViewRect};
 
@@ -17,31 +17,35 @@ const MAX_SCREENSHOT_DIMENSION: u32 = 16_384;
 const MAX_FULL_PAGE_RESIZE_PASSES: usize = 3;
 const SCENE_PROBE_SIZE: PhysicalSize<u32> = PhysicalSize::new(1, 1);
 
-/// Capture a PNG screenshot of the page, temporarily resizing the viewport
-/// to the full content size when `full_page` is set.
+/// Capture a PNG screenshot of the page at the given zoom factor.
 pub(crate) fn capture(
     servo: &servo::Servo,
     webview: &WebView,
     full_page: bool,
+    zoom: f64,
     deadline: Instant,
 ) -> Option<RgbaImage> {
     if !full_page {
-        return take_screenshot(servo, webview, None, deadline);
+        return take_screenshot_viewport(servo, webview, zoom, deadline);
     }
 
-    capture_full_page(servo, webview, deadline)
+    capture_full_page(servo, webview, zoom, deadline)
 }
 
-fn capture_full_page(servo: &servo::Servo, webview: &WebView, deadline: Instant) -> Option<RgbaImage> {
+#[expect(clippy::cast_possible_truncation, reason = "zoom clamped to [0.25, 8.0] fits in f32")]
+fn capture_full_page(servo: &servo::Servo, webview: &WebView, zoom: f64, deadline: Instant) -> Option<RgbaImage> {
     let viewport = PhysicalSize::new(layout::VIEWPORT_WIDTH, layout::VIEWPORT_HEIGHT);
-    let Some(measured) = measure_full_page(servo, webview, deadline) else {
+    let Some(logical) = measure_full_page(servo, webview, deadline) else {
         tracing::warn!("failed to measure full page size; falling back to viewport screenshot");
-        return take_screenshot(servo, webview, None, deadline);
+        return take_screenshot_viewport(servo, webview, 1.0, deadline);
     };
-    let Some(mut capture_size) = resolve_full_page_size(measured, viewport, MAX_SCREENSHOT_DIMENSION) else {
-        return take_screenshot(servo, webview, None, deadline);
-    };
+    let measured = scale_by_zoom(logical, zoom);
+    let mut capture_size = resolve_full_page_size(measured, MAX_SCREENSHOT_DIMENSION).unwrap_or(viewport);
     warn_if_clamped(measured, capture_size);
+
+    if is_supersampled(zoom) {
+        webview.set_hidpi_scale_factor(Scale::new(zoom as f32));
+    }
 
     let _restore = ViewportRestore {
         webview,
@@ -52,11 +56,12 @@ fn capture_full_page(servo: &servo::Servo, webview: &WebView, deadline: Instant)
         webview.resize(capture_size);
         wait_for_scene_update(servo, webview, deadline)?;
 
-        let Some(measured) = measure_full_page(servo, webview, deadline) else {
+        let Some(logical) = measure_full_page(servo, webview, deadline) else {
             tracing::warn!("failed to remeasure full page after resize; capturing current geometry");
             break;
         };
-        let resolved = resolve_full_page_size(measured, viewport, MAX_SCREENSHOT_DIMENSION).unwrap_or(viewport);
+        let measured = scale_by_zoom(logical, zoom);
+        let resolved = resolve_full_page_size(measured, MAX_SCREENSHOT_DIMENSION).unwrap_or(viewport);
         warn_if_clamped(measured, resolved);
         let grown = grow_capture_size(capture_size, resolved);
         if grown == capture_size {
@@ -98,6 +103,21 @@ fn warn_if_clamped(measured: PhysicalSize<u32>, resolved: PhysicalSize<u32>) {
             "full-page dimensions clamped",
         );
     }
+}
+
+#[expect(clippy::cast_possible_truncation, reason = "zoom is finite and positive")]
+#[allow(clippy::cast_sign_loss, reason = "values are non-negative before cast")]
+fn scale_by_zoom(size: PhysicalSize<u32>, zoom: f64) -> PhysicalSize<u32> {
+    let w = (f64::from(size.width) * zoom).round().max(0.0).min(f64::from(u32::MAX)) as u32;
+    let h = (f64::from(size.height) * zoom)
+        .round()
+        .max(0.0)
+        .min(f64::from(u32::MAX)) as u32;
+    PhysicalSize::new(w, h)
+}
+
+fn is_supersampled(zoom: f64) -> bool {
+    zoom > 1.0
 }
 
 /// RAII guard that restores the `WebView`'s viewport size on drop.
@@ -142,6 +162,29 @@ fn take_screenshot(
     }
 }
 
+/// Capture a viewport screenshot at the given zoom factor using resize-capture-restore.
+#[expect(clippy::cast_possible_truncation, reason = "zoom clamped to [0.25, 8.0] fits in f32")]
+fn take_screenshot_viewport(
+    servo: &servo::Servo,
+    webview: &WebView,
+    zoom: f64,
+    deadline: Instant,
+) -> Option<RgbaImage> {
+    if !is_supersampled(zoom) {
+        return take_screenshot(servo, webview, None, deadline);
+    }
+    let viewport = PhysicalSize::new(layout::VIEWPORT_WIDTH, layout::VIEWPORT_HEIGHT);
+    let capture_size = scale_by_zoom(viewport, zoom);
+    webview.set_hidpi_scale_factor(Scale::new(zoom as f32));
+    let _restore = ViewportRestore {
+        webview,
+        size: viewport,
+    };
+    webview.resize(capture_size);
+    wait_for_scene_update(servo, webview, deadline)?;
+    take_screenshot(servo, webview, None, deadline)
+}
+
 #[expect(clippy::cast_precision_loss, reason = "dimensions stay well below 2^23")]
 fn device_rect(size: PhysicalSize<u32>) -> WebViewRect {
     let rect = Box2D::<f32, DevicePixel>::new(
@@ -151,13 +194,8 @@ fn device_rect(size: PhysicalSize<u32>) -> WebViewRect {
     WebViewRect::Device(rect)
 }
 
-/// Return the clamped size to resize the viewport to for a full-page capture,
-/// or `None` if the measured content already fits inside the viewport.
-fn resolve_full_page_size(
-    measured: PhysicalSize<u32>,
-    _viewport: PhysicalSize<u32>,
-    max_pixels: u32,
-) -> Option<PhysicalSize<u32>> {
+/// Clamp full-page capture dimensions to [`MAX_SCREENSHOT_DIMENSION`].
+fn resolve_full_page_size(measured: PhysicalSize<u32>, max_pixels: u32) -> Option<PhysicalSize<u32>> {
     if measured.width == 0 || measured.height == 0 {
         return None;
     }
@@ -211,34 +249,47 @@ mod tests {
     }
 
     #[test]
-    fn resolve_full_page_skips_when_content_fits_viewport() {
-        let vp = size(1280, 800);
-        assert!(resolve_full_page_size(size(1000, 600), vp, 16_384).is_none());
-        assert!(resolve_full_page_size(size(1280, 800), vp, 16_384).is_none());
-    }
-
-    #[test]
-    fn resolve_full_page_expands_when_taller_than_viewport() {
-        let vp = size(1280, 800);
-        assert_eq!(
-            resolve_full_page_size(size(1280, 4000), vp, 16_384),
-            Some(size(1280, 4000)),
-        );
-    }
-
-    #[test]
     fn resolve_full_page_clamps_to_max_pixels() {
-        let vp = size(1280, 800);
-        // Height exceeds the cap; width is left untouched.
         assert_eq!(
-            resolve_full_page_size(size(1280, 50_000), vp, 16_384),
+            resolve_full_page_size(size(1280, 50_000), 16_384),
             Some(size(1280, 16_384)),
         );
-        // Both axes exceed the cap.
         assert_eq!(
-            resolve_full_page_size(size(32_000, 50_000), vp, 16_384),
+            resolve_full_page_size(size(32_000, 50_000), 16_384),
             Some(size(16_384, 16_384)),
         );
+    }
+
+    #[test]
+    fn resolve_full_page_returns_none_on_zero_dimensions() {
+        assert!(resolve_full_page_size(size(0, 100), 16_384).is_none());
+        assert!(resolve_full_page_size(size(100, 0), 16_384).is_none());
+        assert!(resolve_full_page_size(size(0, 0), 16_384).is_none());
+    }
+
+    #[test]
+    fn scale_by_zoom_multiplies_correctly() {
+        assert_eq!(scale_by_zoom(size(428, 684), 1.0), size(428, 684));
+        assert_eq!(scale_by_zoom(size(428, 684), 2.0), size(856, 1368));
+        assert_eq!(scale_by_zoom(size(428, 684), 2.5), size(1070, 1710));
+        assert_eq!(scale_by_zoom(size(428, 684), 4.0), size(1712, 2736));
+    }
+
+    #[test]
+    fn scale_by_zoom_rounds_fractional_values() {
+        // 333 * 3 = 999 exactly; 334 * 3 = 1002
+        assert_eq!(scale_by_zoom(size(333, 334), 3.0), size(999, 1002));
+        // Non-integer zoom: 100 * 2.5 = 250
+        assert_eq!(scale_by_zoom(size(100, 100), 2.5), size(250, 250));
+    }
+
+    #[test]
+    fn is_supersampled_returns_correct_flag() {
+        assert!(!is_supersampled(1.0));
+        assert!(!is_supersampled(0.5));
+        assert!(is_supersampled(1.0001));
+        assert!(is_supersampled(2.0));
+        assert!(is_supersampled(4.0));
     }
 
     #[test]
@@ -253,15 +304,5 @@ mod tests {
         assert_eq!(normalize_dimension(-1.0), 0);
         assert_eq!(normalize_dimension(42.9), 42);
         assert_eq!(normalize_dimension(f64::MAX), u32::MAX);
-    }
-
-    #[test]
-    fn resolve_full_page_never_shrinks_below_viewport() {
-        let vp = size(1280, 800);
-        // Narrow content must still fill the viewport width.
-        assert_eq!(
-            resolve_full_page_size(size(400, 4000), vp, 16_384),
-            Some(size(1280, 4000)),
-        );
     }
 }

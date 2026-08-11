@@ -274,6 +274,7 @@ pub(crate) struct FetchOptions<'a> {
     pub user_agent: Option<&'a str>,
     pub cookies: &'a [CookieSpec],
     pub headers: &'a http::HeaderMap,
+    pub zoom: f64,
 }
 
 /// What to do once the page has loaded. Variants are mutually exclusive.
@@ -302,6 +303,7 @@ struct FetchRequest {
     user_agent: Option<String>,
     cookies: Vec<CookieSpec>,
     headers: http::HeaderMap,
+    zoom: f64,
     reply: ReplyFn,
 }
 
@@ -361,7 +363,7 @@ fn pending_policy() -> crate::net::NetworkPolicy {
     POLICY.get().copied().unwrap_or(crate::net::NetworkPolicy::STRICT)
 }
 
-/// Returns the current network policy configured via [`Engine`].
+/// Returns the network policy set via [`super::init`] (or the default `STRICT`).
 pub fn engine_policy() -> crate::net::NetworkPolicy {
     match ENGINE.get() {
         Some(e) => e.policy,
@@ -413,6 +415,7 @@ fn build_request(opts: FetchOptions<'_>, reply: ReplyFn) -> FetchRequest {
         user_agent: opts.user_agent.map(String::from),
         cookies: opts.cookies.to_vec(),
         headers: opts.headers.clone(),
+        zoom: opts.zoom,
         reply,
     }
 }
@@ -749,7 +752,7 @@ fn finish_fetch(servo: &servo::Servo, p: &PendingFetch) -> Result<ServoPage, Eng
 
     let (screenshot, js_result) = match &p.request.mode {
         FetchMode::Screenshot { full_page } => (
-            crate::screenshot::capture(servo, &p.webview, *full_page, extraction_deadline),
+            crate::screenshot::capture(servo, &p.webview, *full_page, p.request.zoom, extraction_deadline),
             None,
         ),
         FetchMode::ExecuteJs { expression } => {
@@ -1090,6 +1093,7 @@ mod tests {
             cookies: Vec::new(),
             headers: http::HeaderMap::new(),
             reply,
+            zoom: 1.0,
         }
     }
 
@@ -1109,6 +1113,7 @@ mod tests {
             user_agent: Some("test-ua"),
             cookies: &[],
             headers: &http::HeaderMap::new(),
+            zoom: 1.0,
         };
         let req = build_request(opts, Box::new(|_| {}));
         assert_eq!(req.url, "test://example");
@@ -1116,6 +1121,7 @@ mod tests {
         assert_eq!(req.settle_ms, 100);
         assert_eq!(req.user_agent.as_deref(), Some("test-ua"));
         assert!(matches!(req.mode, FetchMode::Content { include_a11y: false }));
+        assert!((req.zoom - 1.0).abs() < f64::EPSILON, "zoom should be 1.0");
     }
 
     #[test]

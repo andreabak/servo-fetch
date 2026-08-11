@@ -29,6 +29,7 @@ async def fetch_async(
     schema: Schema | None = None,
     cookies_file: str | os.PathLike[str] | None = None,
     headers: dict[str, str] | None = None,
+    zoom: float | None = None,
 ) -> Page:
     """Asynchronously fetch a single URL."""
     return await asyncio.to_thread(
@@ -42,6 +43,7 @@ async def fetch_async(
         schema=schema,
         cookies_file=cookies_file,
         headers=headers,
+        zoom=zoom if zoom is not None else 1.0,
     )
 
 
@@ -68,6 +70,7 @@ class AsyncClient:
         schema: Schema | None = None,
         cookies_file: str | os.PathLike[str] | None = None,
         headers: dict[str, str] | None = None,
+        zoom: float | None = None,
     ) -> Page:
         return await asyncio.to_thread(
             self._inner.fetch,
@@ -79,6 +82,7 @@ class AsyncClient:
             schema=schema,
             cookies_file=cookies_file,
             headers=headers,
+            zoom=zoom if zoom is not None else 1.0,
         )
 
     async def crawl(
@@ -223,6 +227,7 @@ class AsyncSession:
         screenshot: bool = False,
         javascript: str | None = None,
         headers: dict[str, str] | None = None,
+        zoom: float | None = None,
     ) -> Page:
         session = await self._session()
         return await asyncio.to_thread(
@@ -233,6 +238,7 @@ class AsyncSession:
             screenshot=screenshot,
             javascript=javascript,
             headers=headers,
+            zoom=zoom if zoom is not None else 1.0,
         )
 
     @property

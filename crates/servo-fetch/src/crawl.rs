@@ -563,6 +563,7 @@ fn spawn_fetch(
                 user_agent: user_agent.as_deref(),
                 cookies: &cookies,
                 headers: &headers,
+                zoom: 1.0,
             })
             .map_err(|error| match error {
                 bridge::EngineError::Timeout(timeout_secs) => crate::error::Error::Timeout {

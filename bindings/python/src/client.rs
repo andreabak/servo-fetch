@@ -36,7 +36,7 @@ impl Client {
     }
 
     /// Fetch a single URL, merging client defaults with per-call overrides.
-    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, full_page=true, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
+    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, full_page=true, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None, zoom=None))]
     #[allow(clippy::too_many_arguments)]
     fn fetch(
         &self,
@@ -51,6 +51,7 @@ impl Client {
         cookies_file: Option<PathBuf>,
         headers: Option<HashMap<String, String>>,
         network_policy: Option<&str>,
+        zoom: Option<f64>,
     ) -> PyResult<Page> {
         let policy = match network_policy {
             None => None,
@@ -77,6 +78,7 @@ impl Client {
             cookies_file,
             headers,
             network_policy: policy,
+            zoom,
         })?;
         let page = py
             .detach(|| servo_fetch::blocking::fetch(&prepared.opts))

@@ -76,7 +76,7 @@ impl Session {
     }
 
     /// Fetch a URL inside this session, preserving cookies and storage across calls.
-    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, full_page=true, javascript=None, headers=None))]
+    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, full_page=true, javascript=None, headers=None, zoom=None))]
     #[allow(clippy::too_many_arguments)]
     fn fetch(
         &self,
@@ -88,6 +88,7 @@ impl Session {
         full_page: bool,
         javascript: Option<String>,
         headers: Option<HashMap<String, String>>,
+        zoom: Option<f64>,
     ) -> PyResult<Page> {
         let prepared = prepare(BuildOpts {
             url,
@@ -101,6 +102,7 @@ impl Session {
             cookies_file: None,
             headers,
             network_policy: None,
+            zoom,
         })?;
         let servo_page = py
             .detach(|| {

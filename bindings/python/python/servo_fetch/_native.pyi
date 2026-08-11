@@ -118,6 +118,7 @@ class Session:
         javascript: str | None = None,
         headers: dict[str, str] | None = None,
         network_policy: NetworkPolicy | None = None,
+        zoom: float = 1.0,
     ) -> Page: ...
     def close(self) -> None: ...
     @property
@@ -149,6 +150,7 @@ class Client:
         cookies_file: str | os.PathLike[str] | None = None,
         headers: dict[str, str] | None = None,
         network_policy: NetworkPolicy | None = None,
+        zoom: float = 1.0,
     ) -> Page: ...
     def crawl(
         self,
@@ -211,4 +213,5 @@ def fetch(
     cookies_file: str | os.PathLike[str] | None = None,
     headers: dict[str, str] | None = None,
     network_policy: NetworkPolicy | None = None,
+    zoom: float = 1.0,
 ) -> Page: ...

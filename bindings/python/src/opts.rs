@@ -20,6 +20,7 @@ pub(crate) struct BuildOpts<'py> {
     pub cookies_file: Option<PathBuf>,
     pub headers: Option<HashMap<String, String>>,
     pub network_policy: Option<servo_fetch::NetworkPolicy>,
+    pub zoom: Option<f64>,
 }
 
 pub(crate) struct Prepared {
@@ -70,6 +71,9 @@ pub(crate) fn prepare(args: BuildOpts<'_>) -> PyResult<Prepared> {
     }
     if let Some(policy) = args.network_policy {
         opts = opts.network_policy(policy);
+    }
+    if let Some(z) = args.zoom {
+        opts = opts.zoom(z);
     }
 
     Ok(Prepared {

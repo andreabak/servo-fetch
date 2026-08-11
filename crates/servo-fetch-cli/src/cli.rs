@@ -93,6 +93,10 @@ pub(crate) struct FetchArgs {
     /// Visibility-aware filtering policy.
     #[arg(long, value_name = "POLICY", value_enum, default_value_t = VisibilityArg::Moderate)]
     pub visibility: VisibilityArg,
+
+    /// Framebuffer zoom factor for supersampling (e.g., `2.0` or `4.0`). Only applies when capturing PNG. Clamped to [0.25, 8.0].
+    #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
+    pub zoom: f64,
 }
 
 /// Visibility filtering policy.

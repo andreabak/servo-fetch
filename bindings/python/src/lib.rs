@@ -20,7 +20,7 @@ use crate::opts::{BuildOpts, prepare};
 
 /// Fetch, render, and extract a single URL.
 #[pyfunction]
-#[pyo3(signature = (url, *, timeout=None, settle=None, user_agent=None, screenshot=false, full_page=true, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
+#[pyo3(signature = (url, *, timeout=None, settle=None, user_agent=None, screenshot=false, full_page=true, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None, zoom=None))]
 #[allow(clippy::too_many_arguments)]
 fn fetch(
     py: Python<'_>,
@@ -35,6 +35,7 @@ fn fetch(
     cookies_file: Option<PathBuf>,
     headers: Option<HashMap<String, String>>,
     network_policy: Option<&str>,
+    zoom: Option<f64>,
 ) -> PyResult<page::Page> {
     let policy = match network_policy {
         None => None,
@@ -59,6 +60,7 @@ fn fetch(
         cookies_file,
         headers,
         network_policy: policy,
+        zoom,
     })?;
     let servo_page = py
         .detach(|| servo_fetch::blocking::fetch(&prepared.opts))

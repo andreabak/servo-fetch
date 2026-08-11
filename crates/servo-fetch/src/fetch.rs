@@ -238,6 +238,7 @@ pub struct FetchOptions {
     pub(crate) cookies: Vec<crate::cookies::CookieSpec>,
     pub(crate) headers: http::HeaderMap,
     pub(crate) network_policy: crate::net::NetworkPolicy,
+    pub(crate) zoom: f64,
 }
 
 impl FetchOptions {
@@ -262,6 +263,7 @@ impl FetchOptions {
             cookies: Vec::new(),
             headers: http::HeaderMap::new(),
             network_policy: crate::net::NetworkPolicy::STRICT,
+            zoom: 1.0,
         }
     }
 
@@ -334,6 +336,15 @@ impl FetchOptions {
         if let FetchMode::Content { include_a11y } = &mut self.mode {
             *include_a11y = on;
         }
+        self
+    }
+
+    /// Scale the capture framebuffer for supersampling (e.g., 2.5x).
+    pub fn zoom(mut self, factor: f64) -> Self {
+        if !factor.is_finite() || factor <= 0.0 {
+            return self;
+        }
+        self.zoom = factor.clamp(0.25, 8.0);
         self
     }
 
@@ -474,6 +485,7 @@ fn build_bridge_options(opts: &FetchOptions) -> crate::bridge::FetchOptions<'_> 
         user_agent: opts.user_agent.as_deref(),
         cookies: &opts.cookies,
         headers: &opts.headers,
+        zoom: opts.zoom,
         mode: match opts.mode {
             FetchMode::Content { include_a11y } => crate::bridge::FetchMode::Content { include_a11y },
             FetchMode::Screenshot { full_page } => crate::bridge::FetchMode::Screenshot { full_page },
