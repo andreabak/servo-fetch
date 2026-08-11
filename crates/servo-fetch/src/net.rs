@@ -7,22 +7,40 @@ use url::Url;
 
 use crate::error::{UrlError, map_url_error};
 
-/// Network access policy — determines which hosts are reachable.
+/// Network access policy — determines which hosts and schemes are reachable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NetworkPolicy {
     deny_private: bool,
+    allow_file_scheme: bool,
 }
 
 impl NetworkPolicy {
-    /// Block all private/reserved addresses (production default).
-    pub const STRICT: Self = Self { deny_private: true };
-    /// Allow all addresses including private (testing only).
-    pub const PERMISSIVE: Self = Self { deny_private: false };
+    /// Block all private/reserved addresses and non-http(s) schemes (production default).
+    pub const STRICT: Self = Self {
+        deny_private: true,
+        allow_file_scheme: false,
+    };
+    /// Allow all addresses and schemes (testing only).
+    pub const PERMISSIVE: Self = Self {
+        deny_private: false,
+        allow_file_scheme: true,
+    };
+    /// Allow file:// scheme but still block private/reserved addresses.
+    pub const PERMISSIVE_LOCAL: Self = Self {
+        deny_private: true,
+        allow_file_scheme: true,
+    };
 
     /// Check whether a host is allowed by this policy.
     #[must_use]
     pub fn is_host_allowed(self, host: &str) -> bool {
         !self.deny_private || !is_private_host(host)
+    }
+
+    /// Check whether the given scheme is allowed by this policy.
+    #[must_use]
+    pub fn is_scheme_allowed(self, scheme: &str) -> bool {
+        matches!(scheme, "http" | "https") || self.allow_file_scheme && scheme == "file"
     }
 }
 
@@ -35,13 +53,11 @@ pub fn validate_url(url: &str) -> crate::error::Result<Url> {
 /// Validate a URL against the given [`NetworkPolicy`].
 pub(crate) fn validate_url_with_policy(input: &str, policy: NetworkPolicy) -> Result<Url, UrlError> {
     let mut parsed = Url::parse(input).map_err(|e| UrlError::Invalid(e.to_string()))?;
-    match parsed.scheme() {
-        "http" | "https" => {}
-        s => {
-            return Err(UrlError::Invalid(format!(
-                "scheme '{s}' not allowed; only http:// and https:// are supported"
-            )));
-        }
+    if !policy.is_scheme_allowed(parsed.scheme()) {
+        return Err(UrlError::Invalid(format!(
+            "scheme '{}' not allowed; only http:// and https:// are supported",
+            parsed.scheme()
+        )));
     }
     if !parsed.username().is_empty() || parsed.password().is_some() {
         tracing::warn!("credentials stripped from URL");

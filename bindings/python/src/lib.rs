@@ -20,7 +20,7 @@ use crate::opts::{BuildOpts, prepare};
 
 /// Fetch, render, and extract a single URL.
 #[pyfunction]
-#[pyo3(signature = (url, *, timeout=None, settle=None, user_agent=None, screenshot=false, javascript=None, schema=None, cookies_file=None, headers=None))]
+#[pyo3(signature = (url, *, timeout=None, settle=None, user_agent=None, screenshot=false, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
 #[allow(clippy::too_many_arguments)]
 fn fetch(
     py: Python<'_>,
@@ -33,7 +33,19 @@ fn fetch(
     schema: Option<Bound<'_, schema::Schema>>,
     cookies_file: Option<PathBuf>,
     headers: Option<HashMap<String, String>>,
+    network_policy: Option<&str>,
 ) -> PyResult<page::Page> {
+    let policy = match network_policy {
+        None => None,
+        Some("strict") => Some(servo_fetch::NetworkPolicy::STRICT),
+        Some("permissive") => Some(servo_fetch::NetworkPolicy::PERMISSIVE),
+        Some("permissive_local") => Some(servo_fetch::NetworkPolicy::PERMISSIVE_LOCAL),
+        Some(s) => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid network_policy '{s}': must be 'strict', 'permissive', or 'permissive_local'"
+            )));
+        }
+    };
     let prepared = prepare(BuildOpts {
         url,
         timeout,
@@ -44,6 +56,7 @@ fn fetch(
         schema,
         cookies_file,
         headers,
+        network_policy: policy,
     })?;
     let servo_page = py
         .detach(|| servo_fetch::blocking::fetch(&prepared.opts))

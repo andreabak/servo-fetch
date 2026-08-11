@@ -53,9 +53,12 @@ fn configure_worker_command() -> anyhow::Result<()> {
 
 fn dispatch(args: &Cli) -> anyhow::Result<()> {
     if args.command.as_ref().is_none_or(Command::needs_servo_init) {
-        let policy = if args.allow_private_addresses || std::env::var_os("SERVO_FETCH_ALLOW_PRIVATE").is_some() {
+        let allow_private = args.allow_private_addresses || std::env::var_os("SERVO_FETCH_ALLOW_PRIVATE").is_some();
+        let policy = if allow_private {
             tracing::warn!("SSRF protection disabled: private/loopback addresses are reachable");
             servo_fetch::NetworkPolicy::PERMISSIVE
+        } else if args.allow_file_scheme || std::env::var_os("SERVO_FETCH_ALLOW_FILE_SCHEME").is_some() {
+            servo_fetch::NetworkPolicy::PERMISSIVE_LOCAL
         } else {
             servo_fetch::NetworkPolicy::STRICT
         };

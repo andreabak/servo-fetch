@@ -237,6 +237,7 @@ pub struct FetchOptions {
     pub(crate) visibility: Option<crate::visibility::VisibilityPolicy>,
     pub(crate) cookies: Vec<crate::cookies::CookieSpec>,
     pub(crate) headers: http::HeaderMap,
+    pub(crate) network_policy: crate::net::NetworkPolicy,
 }
 
 impl FetchOptions {
@@ -260,6 +261,7 @@ impl FetchOptions {
             visibility: None,
             cookies: Vec::new(),
             headers: http::HeaderMap::new(),
+            network_policy: crate::net::NetworkPolicy::STRICT,
         }
     }
 
@@ -321,6 +323,12 @@ impl FetchOptions {
         self
     }
 
+    /// Network access policy for URL validation (default: STRICT).
+    pub fn network_policy(mut self, policy: crate::net::NetworkPolicy) -> Self {
+        self.network_policy = policy;
+        self
+    }
+
     /// Capture the page's accessibility tree (read via [`Page::accessibility_tree`]).
     pub fn accessibility(mut self, on: bool) -> Self {
         if let FetchMode::Content { include_a11y } = &mut self.mode {
@@ -353,7 +361,8 @@ fn fetch_servo_blocking(opts: &FetchOptions) -> crate::error::Result<Page> {
 
 pub(crate) fn fetch_in_process_blocking(opts: &FetchOptions) -> crate::error::Result<Page> {
     crate::net::ensure_crypto_provider();
-    crate::net::validate_url(&opts.url)?;
+    crate::net::validate_url_with_policy(&opts.url, opts.network_policy)
+        .map_err(|e| crate::error::map_url_error(&opts.url, e))?;
     fetch_servo_blocking(opts)
 }
 
@@ -409,7 +418,8 @@ pub async fn text(url: &str) -> crate::error::Result<String> {
 
 fn pre_fetch(opts: &FetchOptions) -> crate::error::Result<Option<Page>> {
     crate::net::ensure_crypto_provider();
-    crate::net::validate_url(&opts.url)?;
+    crate::net::validate_url_with_policy(&opts.url, opts.network_policy)
+        .map_err(|e| crate::error::map_url_error(&opts.url, e))?;
 
     if matches!(opts.mode, FetchMode::Content { .. }) {
         let headers = pdf_headers(opts)?;

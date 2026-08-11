@@ -42,6 +42,7 @@ pub(crate) mod session;
 pub(crate) mod sys;
 mod worker;
 
+pub use bridge::engine_policy;
 pub use client::{Client, ClientBuilder, ScreenshotOptions};
 pub use cookies::{CookieSpec, load_cookies};
 pub use crawl::{CrawlOptions, CrawlPage, CrawlResult, crawl, crawl_each};

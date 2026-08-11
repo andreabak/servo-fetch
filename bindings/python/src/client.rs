@@ -36,7 +36,7 @@ impl Client {
     }
 
     /// Fetch a single URL, merging client defaults with per-call overrides.
-    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, javascript=None, schema=None, cookies_file=None, headers=None))]
+    #[pyo3(signature = (url, *, timeout=None, settle=None, screenshot=false, javascript=None, schema=None, cookies_file=None, headers=None, network_policy=None))]
     #[allow(clippy::too_many_arguments)]
     fn fetch(
         &self,
@@ -49,7 +49,19 @@ impl Client {
         schema: Option<Bound<'_, Schema>>,
         cookies_file: Option<PathBuf>,
         headers: Option<HashMap<String, String>>,
+        network_policy: Option<&str>,
     ) -> PyResult<Page> {
+        let policy = match network_policy {
+            None => None,
+            Some("strict") => Some(servo_fetch::NetworkPolicy::STRICT),
+            Some("permissive") => Some(servo_fetch::NetworkPolicy::PERMISSIVE),
+            Some("permissive_local") => Some(servo_fetch::NetworkPolicy::PERMISSIVE_LOCAL),
+            Some(s) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "invalid network_policy '{s}': must be 'strict', 'permissive', or 'permissive_local'"
+                )));
+            }
+        };
         let timeout = timeout.or(Some(self.timeout.as_secs_f64()));
         let settle = settle.or(Some(self.settle.as_secs_f64()));
         let prepared = prepare(BuildOpts {
@@ -62,6 +74,7 @@ impl Client {
             schema,
             cookies_file,
             headers,
+            network_policy: policy,
         })?;
         let page = py
             .detach(|| servo_fetch::blocking::fetch(&prepared.opts))

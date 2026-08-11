@@ -361,7 +361,8 @@ fn pending_policy() -> crate::net::NetworkPolicy {
     POLICY.get().copied().unwrap_or(crate::net::NetworkPolicy::STRICT)
 }
 
-pub(crate) fn engine_policy() -> crate::net::NetworkPolicy {
+/// Returns the current network policy configured via [`Engine`].
+pub fn engine_policy() -> crate::net::NetworkPolicy {
     match ENGINE.get() {
         Some(e) => e.policy,
         None => pending_policy(),

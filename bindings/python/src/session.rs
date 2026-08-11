@@ -98,6 +98,7 @@ impl Session {
             schema: None,
             cookies_file: None,
             headers,
+            network_policy: None,
         })?;
         let servo_page = py
             .detach(|| {

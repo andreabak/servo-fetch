@@ -18,6 +18,7 @@ pub(crate) struct BuildOpts<'py> {
     pub schema: Option<Bound<'py, Schema>>,
     pub cookies_file: Option<PathBuf>,
     pub headers: Option<HashMap<String, String>>,
+    pub network_policy: Option<servo_fetch::NetworkPolicy>,
 }
 
 pub(crate) struct Prepared {
@@ -65,6 +66,9 @@ pub(crate) fn prepare(args: BuildOpts<'_>) -> PyResult<Prepared> {
     }
     if let Some(map) = &args.headers {
         opts = opts.headers(servo_fetch::headers::from_pairs(map).map_err(crate::errors::map_error)?);
+    }
+    if let Some(policy) = args.network_policy {
+        opts = opts.network_policy(policy);
     }
 
     Ok(Prepared {

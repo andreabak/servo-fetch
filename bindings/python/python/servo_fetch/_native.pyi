@@ -116,6 +116,7 @@ class Session:
         screenshot: bool = False,
         javascript: str | None = None,
         headers: dict[str, str] | None = None,
+        network_policy: NetworkPolicy | None = None,
     ) -> Page: ...
     def close(self) -> None: ...
     @property
@@ -145,6 +146,7 @@ class Client:
         schema: Schema | None = None,
         cookies_file: str | os.PathLike[str] | None = None,
         headers: dict[str, str] | None = None,
+        network_policy: NetworkPolicy | None = None,
     ) -> Page: ...
     def crawl(
         self,
@@ -192,6 +194,8 @@ class EngineError(ServoFetchError): ...
 class SchemaError(ServoFetchError): ...
 class CookieError(ServoFetchError): ...
 
+NetworkPolicy: TypeAlias = Literal["strict", "permissive", "permissive_local"]
+
 def fetch(
     url: str,
     *,
@@ -203,4 +207,5 @@ def fetch(
     schema: Schema | None = None,
     cookies_file: str | os.PathLike[str] | None = None,
     headers: dict[str, str] | None = None,
+    network_policy: NetworkPolicy | None = None,
 ) -> Page: ...

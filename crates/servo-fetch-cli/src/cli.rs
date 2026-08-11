@@ -29,6 +29,10 @@ pub(crate) struct Cli {
     /// Allow requests to loopback/private addresses (for testing with local servers).
     #[arg(long = "allow-private-addresses", hide = true, global = true)]
     pub allow_private_addresses: bool,
+
+    /// Allow file:// URLs for local HTML rendering (for testing with temp files).
+    #[arg(long = "allow-file-scheme", hide = true, global = true)]
+    pub allow_file_scheme: bool,
 }
 
 #[derive(Args, Debug)]
